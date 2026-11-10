@@ -26,3 +26,11 @@ jobs:
 
       - name: Generer une video
         run: python generate.py
+
+      - name: Recuperer la video
+        uses: actions/upload-artifact@v4
+        with:
+          name: papi-comedy-video
+          path: videos/*.mp4
+          if-no-files-found: error
+          retention-days: 7
