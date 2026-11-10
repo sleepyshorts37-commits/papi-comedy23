@@ -118,7 +118,7 @@ def make_frame(path, title, role, line, index, total):
     d = ImageDraw.Draw(im)
     # top banner and accents
     d.rounded_rectangle((55, 55, W-55, 270), radius=45, fill=INK)
-    title_font = font( fifty :=  fifty if False else 48, True)
+    title_font = font(48, True)
     title_lines = wrap(d, title, title_font, W-150)
     y = 90
     for t in title_lines[:2]:
@@ -126,7 +126,7 @@ def make_frame(path, title, role, line, index, total):
         d.text(((W-(box[2]-box[0]))/2, y), t, font=title_font, fill="white")
         y += 66
     d.ellipse((75, 335, 170, 430), fill=YELLOW)
-    d.text((100, 348), "😂", font=font(52), fill=INK)
+    d.text((100, 348), "!", font=font(52, True), fill=INK)
     d.text((205, 365), f"SCÈNE {index+1}/{total}", font=font(36, True), fill=INK)
     # speech bubble
     bubble = (70, 520, 1010, 1050)
