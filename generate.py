@@ -177,7 +177,7 @@ async def make_voice(text, path):
     concat = path.parent / f"{path.stem}_parts.txt"
     with concat.open("w", encoding="utf-8") as f:
         for part in parts:
-            f.write(f"file '{part.resolve()}'\\n")
+            f.write(f"file '{part.resolve()}'\n")
     subprocess.run([
         "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat),
         "-af", "apad=pad_dur=0.10", "-c:a", "libmp3lame", "-q:a", "3", str(path)
