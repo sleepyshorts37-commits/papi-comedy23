@@ -100,7 +100,7 @@ def draw_animal(draw, kind, cx, cy, scale=1.0):
         draw.arc((cx-20,cy+95,cx+100,cy+225), 5, 180, fill=dark, width=7)
     elif kind == "rabbit":
         fur = (248, 235, 222)
-        draw.ellipse((cx-135,cy-165,cx-45,cy-325), fill=fur, outline=dark, width=8)
+        draw.ellipse((cx-135,cy-325,cx-45,cy-165), fill=fur, outline=dark, width=8)
         draw.ellipse((cx+45,cy-325,cx+135,cy-165), fill=fur, outline=dark, width=8)
         draw.ellipse((cx-155,cy-180,cx+155,cy+145), fill=fur, outline=dark, width=8)
         draw.ellipse((cx-92,cy-275,cx-63,cy-190), fill=(240,160,170))
