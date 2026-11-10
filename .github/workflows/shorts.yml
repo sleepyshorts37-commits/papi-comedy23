@@ -29,14 +29,45 @@ jobs:
           pip install edge-tts pillow
 
       - name: Generer une video illustree
-        run: python generate.py
+        run: |
+          set -o pipefail
+          python generate.py | tee generation.log
 
-      - name: Sauvegarder la derniere video pour publication
+      - name: Publier automatiquement sur YouTube Shorts
+        env:
+          UPLOAD_POST_API_KEY: ${{ secrets.UPLOAD_POST_API_KEY }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          VIDEO="$(ls -t videos/*.mp4 | head -n 1)"
+          TITLE="$(sed -n 's/^TITLE: //p' generation.log | tail -n 1)"
+          test -n "$TITLE"
+          test -n "$UPLOAD_POST_API_KEY"
+          DURATION="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$VIDEO")"
+          python -c "import sys; d=float(sys.argv[1]); sys.exit(0 if 0 < d <= 180 else 1)" "$DURATION"
+          RESPONSE="$(curl --fail-with-body --silent --show-error \
+            -X POST "https://api.upload-post.com/api/upload" \
+            -H "Authorization: Apikey $UPLOAD_POST_API_KEY" \
+            -H "Idempotency-Key: papi-comedy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            -F "video=@$VIDEO;type=video/mp4" \
+            -F "title=$TITLE" \
+            -F "description=Une nouvelle sketch humoristique de Papi Comedy 😂 Abonne-toi pour ne rien manquer !" \
+            -F "user=P" \
+            -F "platform[]=youtube" \
+            -F "privacyStatus=public" \
+            -F "tags[]=humour" \
+            -F "tags[]=comedy" \
+            -F "tags[]=shorts")"
+          echo "$RESPONSE"
+          python -c "import json,sys; r=json.loads(sys.argv[1]); sys.exit(0 if r.get('success') is True else 1)" "$RESPONSE"
+
+      - name: Sauvegarder la derniere video
         run: |
           mkdir -p public
-          cp videos/*.mp4 public/latest.mp4
+          cp "$(ls -t videos/*.mp4 | head -n 1)" public/latest.mp4
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add public/latest.mp4
-          git commit -m "Generate latest Papi Comedy Short" || echo "No changes to commit"
+          git commit -m "Generate and publish latest Papi Comedy Short" || echo "No changes to commit"
           git push
