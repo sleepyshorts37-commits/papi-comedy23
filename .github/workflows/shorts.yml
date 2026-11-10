@@ -7,6 +7,10 @@ on:
   schedule:
     - cron: "0 9,12,15,18,21 * * *"
 
+concurrency:
+  group: papi-comedy-production
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
