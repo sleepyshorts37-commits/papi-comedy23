@@ -157,8 +157,31 @@ def make_frame(path, title, lyric, index, total, kind):
     im.save(path,quality=95)
 
 async def make_voice(text, path):
-    # Voix française douce, débit ralenti. La mélodie instrumentale est originale.
-    await edge_tts.Communicate(text, voice="fr-FR-DeniseNeural", rate="-12%", pitch="+2Hz").save(str(path))
+    # Chant mélodique : chaque segment de phrase est interprété sur une note
+    # différente de la gamme, puis les segments sont assemblés sans voix parlée continue.
+    words = text.replace(";", ",").split(",")
+    phrases = [p.strip() for p in words if p.strip()]
+    if not phrases:
+        phrases = [text]
+    pitches = ["-2Hz", "+3Hz", "+7Hz", "+10Hz", "+5Hz", "+1Hz", "-3Hz", "+5Hz"]
+    parts = []
+    for i, phrase in enumerate(phrases):
+        part = path.parent / f"{path.stem}_part_{i:02d}.mp3"
+        await edge_tts.Communicate(
+            phrase,
+            voice="fr-FR-DeniseNeural",
+            rate="-8%",
+            pitch=pitches[i % len(pitches)]
+        ).save(str(part))
+        parts.append(part)
+    concat = path.parent / f"{path.stem}_parts.txt"
+    with concat.open("w", encoding="utf-8") as f:
+        for part in parts:
+            f.write(f"file '{part.resolve()}'\\n")
+    subprocess.run([
+        "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat),
+        "-af", "apad=pad_dur=0.10", "-c:a", "libmp3lame", "-q:a", "3", str(path)
+    ], check=True)
 
 def make_music(path, seconds):
     # Petite mélodie originale en notes douces, synthétisée sans sample protégé.
