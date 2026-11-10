@@ -1,0 +1,1 @@
+Papi Comedy production is configured to generate illustrated French comedy Shorts on pushes to main and at 12:00, 17:00 and 20:00 Africa/Dakar time. Generated video is saved at public/latest.mp4 for publication.
