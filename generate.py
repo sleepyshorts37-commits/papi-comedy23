@@ -210,12 +210,12 @@ async def main():
     audio_list=work/"audios.txt"
     with frame_list.open("w",encoding="utf-8") as f:
         for frame,duration in zip(frames,durations):
-            f.write(f"file '{frame.resolve()}'\\n")
-            f.write(f"duration {duration:.3f}\\n")
-        f.write(f"file '{frames[-1].resolve()}'\\n")
+            f.write(f"file '{frame.resolve()}'\n")
+            f.write(f"duration {duration:.3f}\n")
+        f.write(f"file '{frames[-1].resolve()}'\n")
     with audio_list.open("w",encoding="utf-8") as f:
         for audio in audios:
-            f.write(f"file '{audio.resolve()}'\\n")
+            f.write(f"file '{audio.resolve()}'\n")
 
     narration=work/"narration.mp3"
     subprocess.run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(audio_list),"-c:a","libmp3lame","-q:a","4",str(narration)],check=True)
