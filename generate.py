@@ -15,36 +15,36 @@ BG = (255, 244, 226)
 INK = (55, 55, 78)
 PALETTE = [(255, 219, 172), (205, 232, 245), (239, 218, 245), (215, 239, 207), (255, 229, 190)]
 
-# Comptines originales : paroles inédites, adaptées aux tout-petits.
+# Sketches humoristiques originaux, avec dialogues courts pour YouTube Shorts.
 SONGS = [
     {
-        "title": "Le petit lion compte les étoiles",
+        "title": "Bouki et le téléphone intelligent",
         "lines": [
-            "Petit lion ferme les yeux, une étoile brille dans les cieux.",
-            "Un, deux, trois, les étoiles dansent avec toi.",
-            "Petit éléphant tape des mains, quatre, cinq, tout va bien.",
-            "La lune sourit, le vent est doux, les petits rêves viennent à nous.",
-            "Dors mon bébé, la nuit est jolie, demain le soleil te sourit."
+            "Au village, Bouki arrive tout fier : « J'ai acheté un téléphone intelligent ! »",
+            "Le lion demande : « Il sait faire quoi ? » Bouki répond : « Il réfléchit à ma place ! »",
+            "Le lion dit : « Alors demande-lui où tu as posé ton téléphone. »",
+            "Bouki regarde sa main : « Aïe ! Je suis en train de lui parler dessus ! »",
+            "Le téléphone sonne. C'est le lion qui appelle. Bouki crie : « Même mon téléphone se moque de moi ! »"
         ],
     },
     {
-        "title": "Les couleurs du petit arc-en-ciel",
+        "title": "Bouki devient milliardaire",
         "lines": [
-            "Rouge comme une jolie fleur, jaune comme un rayon de bonheur.",
-            "Bleu comme la mer qui fait coucou, vert comme les feuilles tout partout.",
-            "Orange comme un fruit sucré, violet comme un ciel enchanté.",
-            "Toutes les couleurs font la ronde, elles mettent des sourires dans le monde.",
-            "Tape des mains, tourne doucement, l'arc-en-ciel chante avec les enfants."
+            "Bouki annonce au village : « Demain, je serai milliardaire ! »",
+            "Le lapin demande : « Tu as gagné à la loterie ? » Bouki répond : « Non, j'ai un grand projet ! »",
+            "« Quel projet ? » demande le lion. Bouki dit : « Je vais vendre de l'eau à la rivière ! »",
+            "Le lion éclate de rire : « Mais qui va acheter ça ? »",
+            "Bouki sourit : « Ceux qui n'ont pas le temps d'aller jusqu'à la rivière ! »"
         ],
     },
     {
-        "title": "Un, deux, trois petits animaux",
+        "title": "Le repas de Bouki",
         "lines": [
-            "Un petit lapin saute dans le jardin.",
-            "Deux papillons volent au matin.",
-            "Trois petits canards font coin-coin dans l'eau.",
-            "Quatre oiseaux chantent tout là-haut.",
-            "Cinq amis dansent, bravo, bravo !"
+            "Bouki entre dans la cuisine : « Aujourd'hui, je prépare le meilleur repas du village ! »",
+            "Il met du piment, du sel, du citron... puis encore du piment.",
+            "Le lapin goûte une cuillère et se met à courir en rond.",
+            "Le lion demande : « Alors, c'est bon ? » Le lapin répond : « Je ne sais pas, ma bouche a démissionné ! »",
+            "Bouki goûte à son tour : « Parfait ! Demain, je cuisine avec un extincteur ! »"
         ],
     },
 ]
@@ -138,7 +138,7 @@ def make_frame(path, title, lyric, index, total, kind):
         yy += 65
     # scene number
     d.rounded_rectangle((390,350,690,435), radius=35, fill=(255,214,120), outline=INK, width=5)
-    label=f"CHANSON {index+1}/{total}"
+    label=f"SCÈNE {index+1}/{total}"
     d.text((425,370),label,font=get_font(31,True),fill=INK)
     # character stage
     d.ellipse((175,520,905,1330), fill=(255,255,248), outline=(255,255,255), width=14)
@@ -153,7 +153,7 @@ def make_frame(path, title, lyric, index, total, kind):
         box=d.textbbox((0,0),line,font=get_font(48,True))
         d.text(((W-(box[2]-box[0]))/2,ty),line,font=get_font(48,True),fill=INK)
         ty += 72
-    d.text((390,1850),"PAPI • PETITES CHANSONS",font=get_font(25,True),fill=(115,105,130))
+    d.text((390,1850),"PAPI COMEDY • SKETCH ORIGINAL",font=get_font(25,True),fill=(115,105,130))
     im.save(path,quality=95)
 
 async def make_voice(text, path):
@@ -214,7 +214,7 @@ async def main():
     work.mkdir(exist_ok=True)
     output.mkdir(exist_ok=True)
     frames,audios,durations=[],[],[]
-    animals=["lion","elephant","rabbit","bear","lion"]
+    animals=["rabbit","lion","rabbit","lion","rabbit"]
     for i,line in enumerate(song["lines"]):
         frame=work/f"nursery_{i:02d}.jpg"
         audio=work/f"voice_{i:02d}.mp3"
@@ -256,8 +256,8 @@ async def main():
         "-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart",str(video)
     ],check=True)
     print(f"VIDEO CREATED: {video}")
-    print(f"TITLE: {song['title']} | Comptine originale pour bébé")
-    print("FORMAT: comptine française, voix douce et mélodie instrumentale originale")
+    print(f"TITLE: {song['title']} | Sketch humoristique original")
+    print("FORMAT: sketch humoristique français, dialogues et mélodie originale")
 
 if __name__=="__main__":
     asyncio.run(main())
