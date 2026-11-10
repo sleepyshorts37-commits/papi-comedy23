@@ -2,6 +2,7 @@ import asyncio
 import random
 import subprocess
 import textwrap
+import math
 from pathlib import Path
 from datetime import datetime
 
@@ -134,9 +135,18 @@ def draw_character(draw, cx, cy, role, mood):
 def make_frame(path, title, role, line, index, total):
     im = Image.new("RGB", (W, H), (248, 235, 215))
     d = ImageDraw.Draw(im)
-    # Soft illustrated background, decorative rays and city-like silhouettes
-    for x in range(0, W, 120):
-        d.line((x, 300, x-180, 1050), fill=(240, 220, 193), width=5)
+    # Manga-inspired dramatic background: speed lines and screen-tone dots
+    for k in range(48):
+        angle = (2 * math.pi * k) / 48
+        x1 = int(540 + math.cos(angle) * 120)
+        y1 = int(900 + math.sin(angle) * 120)
+        x2 = int(540 + math.cos(angle) * 1050)
+        y2 = int(900 + math.sin(angle) * 1800)
+        d.line((x1, y1, x2, y2), fill=(225, 205, 185), width=4)
+    for x in range(18, W, 34):
+        for y in range(440, 1040, 34):
+            if (x + y) % 3 == 0:
+                d.ellipse((x, y, x+5, y+5), fill=(220, 200, 185))
     d.ellipse((-180, 1120, 420, 1730), fill=(239, 218, 190))
     d.ellipse((740, 1150, 1280, 1740), fill=(239, 218, 190))
     d.rounded_rectangle((45, 45, W-45, 285), radius=55, fill=(31, 29, 40))
@@ -167,6 +177,13 @@ def make_frame(path, title, role, line, index, total):
         box = d.textbbox((0,0), t, font=dialogue_font)
         d.text(((W-(box[2]-box[0]))/2, ty), t, font=dialogue_font, fill=(31,29,40))
         ty += 82
+    # Manga impact marks around the character panels
+    for cx, cy in ((345, 1315), (735, 1315)):
+        for a in range(0, 360, 30):
+            rad = math.radians(a)
+            x1, y1 = int(cx + math.cos(rad)*205), int(cy + math.sin(rad)*205)
+            x2, y2 = int(cx + math.cos(rad)*255), int(cy + math.sin(rad)*255)
+            d.line((x1, y1, x2, y2), fill=(35, 31, 42), width=7)
     # Character spotlights and richer cartoon portraits
     d.ellipse((155, 1120, 535, 1510), fill=(255,255,250), outline=(31,29,40), width=7)
     d.ellipse((545, 1120, 925, 1510), fill=(255,255,250), outline=(31,29,40), width=7)
@@ -219,9 +236,9 @@ async def main():
     video_file = output / f"papi_comedy_{stamp}.mp4"
     subprocess.run([
         "ffmpeg","-y","-f","concat","-safe","0","-i",str(frame_list),"-i",str(joined_audio),
-        "-vf","scale=1080:1920,format=yuv420p",
-        "-r","30","-c:v","libx264","-preset","ultrafast","-tune","stillimage",
-        "-c:a","aac","-b:a","128k","-shortest","-movflags","+faststart",str(video_file)
+        "-vf","scale=2160:3840:flags=lanczos,unsharp=5:5:0.35:5:5:0.0,format=yuv420p",
+        "-r","30","-c:v","libx264","-preset","medium","-crf","18","-tune","stillimage",
+        "-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart",str(video_file)
     ],check=True)
     print(f"VIDEO CREATED: {video_file}")
     print(f"TITLE: {sketch['title']}")
