@@ -1,8 +1,9 @@
 import asyncio
+import math
 import random
 import subprocess
-import textwrap
-import math
+import wave
+import struct
 from pathlib import Path
 from datetime import datetime
 
@@ -10,238 +11,230 @@ import edge_tts
 from PIL import Image, ImageDraw, ImageFont
 
 W, H = 1080, 1920
-BG = (250, 239, 220)
-INK = (35, 31, 42)
-PINK = (235, 83, 120)
-BLUE = (69, 126, 184)
-YELLOW = (255, 203, 75)
+BG = (255, 244, 226)
+INK = (55, 55, 78)
+PALETTE = [(255, 219, 172), (205, 232, 245), (239, 218, 245), (215, 239, 207), (255, 229, 190)]
 
-SKETCHES = [
+# Comptines originales : paroles inédites, adaptées aux tout-petits.
+SONGS = [
     {
-        "title": "Quand ta femme dit : fais comme tu veux 😂",
-        "dialogue": [
-            ("homme", "Chérie, je peux sortir avec mes amis ce soir ?"),
-            ("femme", "Fais comme tu veux."),
-            ("homme", "Merci mon amour !"),
-            ("femme", "Mais n'oublie pas la maison, les enfants et les factures !"),
-            ("homme", "Seigneur, je voulais juste boire un jus !"),
+        "title": "Le petit lion compte les étoiles",
+        "lines": [
+            "Petit lion ferme les yeux, une étoile brille dans les cieux.",
+            "Un, deux, trois, les étoiles dansent avec toi.",
+            "Petit éléphant tape des mains, quatre, cinq, tout va bien.",
+            "La lune sourit, le vent est doux, les petits rêves viennent à nous.",
+            "Dors mon bébé, la nuit est jolie, demain le soleil te sourit."
         ],
     },
     {
-        "title": "Le Sénégalais et son salaire 😂",
-        "dialogue": [
-            ("homme", "Patron, mon salaire est arrivé ?"),
-            ("femme", "Oui. Tu as reçu ton salaire hier."),
-            ("homme", "Alors pourquoi mon compte est déjà vide ?"),
-            ("femme", "Tes créanciers ont été plus rapides que toi !"),
-            ("homme", "Même l'argent ne veut pas rester avec moi !"),
+        "title": "Les couleurs du petit arc-en-ciel",
+        "lines": [
+            "Rouge comme une jolie fleur, jaune comme un rayon de bonheur.",
+            "Bleu comme la mer qui fait coucou, vert comme les feuilles tout partout.",
+            "Orange comme un fruit sucré, violet comme un ciel enchanté.",
+            "Toutes les couleurs font la ronde, elles mettent des sourires dans le monde.",
+            "Tape des mains, tourne doucement, l'arc-en-ciel chante avec les enfants."
         ],
     },
     {
-        "title": "Quand maman t'appelle 😂",
-        "dialogue": [
-            ("femme", "Allô ! Tu es où ?"),
-            ("homme", "Je suis presque arrivé, maman."),
-            ("femme", "Tu es parti d'où exactement ?"),
-            ("homme", "Du lit... je cherche encore mes chaussures."),
-            ("femme", "Attends-moi. J'arrive te réveiller !"),
-        ],
-    },
-    {
-        "title": "Le fameux je suis en route 😂",
-        "dialogue": [
-            ("femme", "Tu es où ? On t'attend depuis une heure !"),
-            ("homme", "Je suis en route, j'arrive dans cinq minutes."),
-            ("femme", "Mais j'entends la télé derrière toi !"),
-            ("homme", "C'est la circulation qui passe à la télé."),
-            ("femme", "Toi, tu vas finir par épouser ton canapé !"),
+        "title": "Un, deux, trois petits animaux",
+        "lines": [
+            "Un petit lapin saute dans le jardin.",
+            "Deux papillons volent au matin.",
+            "Trois petits canards font coin-coin dans l'eau.",
+            "Quatre oiseaux chantent tout là-haut.",
+            "Cinq amis dansent, bravo, bravo !"
         ],
     },
 ]
 
-def font(size, bold=False):
-    paths = [
+def get_font(size, bold=False):
+    choices = [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
     ]
-    for p in paths:
-        if Path(p).exists():
-            return ImageFont.truetype(p, size)
+    for path in choices:
+        if Path(path).exists():
+            return ImageFont.truetype(path, size)
     return ImageFont.load_default()
 
-def wrap(draw, text, fnt, max_width):
-    words, lines, line = text.split(), [], ""
-    for word in words:
-        test = (line + " " + word).strip()
-        if draw.textbbox((0, 0), test, font=fnt)[2] <= max_width:
-            line = test
+def wrap(draw, text, fnt, width):
+    result, current = [], ""
+    for word in text.split():
+        candidate = (current + " " + word).strip()
+        if draw.textbbox((0, 0), candidate, font=fnt)[2] <= width:
+            current = candidate
         else:
-            if line:
-                lines.append(line)
-            line = word
-    if line:
-        lines.append(line)
-    return lines
+            if current:
+                result.append(current)
+            current = word
+    if current:
+        result.append(current)
+    return result
 
-def draw_character(draw, cx, cy, role, mood):
-    skin = (111, 65, 45)
-    shirt = (39, 105, 170) if role == "homme" else (203, 65, 112)
-    dark = (28, 23, 27)
-    # Neck, shoulders and torso with layered clothing
-    draw.rounded_rectangle((cx-150, cy+150, cx+150, cy+540), radius=95, fill=shirt, outline=dark, width=10)
-    draw.polygon([(cx-52,cy+170),(cx,cy+245),(cx+52,cy+170)], fill=(245,238,226), outline=dark)
-    draw.line((cx,cy+245,cx,cy+490), fill=(245,238,226), width=7)
-    draw.ellipse((cx-48,cy+105,cx+48,cy+220), fill=skin, outline=dark, width=7)
-    # Ears and face
-    draw.ellipse((cx-165,cy-65,cx-105,cy+55), fill=skin, outline=dark, width=8)
-    draw.ellipse((cx+105,cy-65,cx+165,cy+55), fill=skin, outline=dark, width=8)
-    draw.ellipse((cx-145,cy-155,cx+145,cy+170), fill=skin, outline=dark, width=10)
-    # Hair style
-    if role == "homme":
-        draw.pieslice((cx-152,cy-180,cx+152,cy+100),180,360,fill=(25,21,22),outline=dark,width=7)
-        for dx in [-100,-50,0,50,100]:
-            draw.arc((cx+dx-28,cy-165,cx+dx+28,cy-100),180,350,fill=(65,42,34),width=8)
-    else:
-        draw.arc((cx-175,cy-190,cx+175,cy+180),175,365,fill=(22,18,22),width=42)
-        draw.rounded_rectangle((cx-165,cy-25,cx-115,cy+270),radius=24,fill=(22,18,22))
-        draw.rounded_rectangle((cx+115,cy-25,cx+165,cy+270),radius=24,fill=(22,18,22))
-        # head scarf detail
-        draw.arc((cx-135,cy-175,cx+135,cy+30),185,355,fill=(245,183,73),width=12)
-    # expressive brows and eyes
-    if mood == "angry":
-        draw.line((cx-90,cy-45,cx-35,cy-20),fill=dark,width=13)
-        draw.line((cx+35,cy-20,cx+90,cy-45),fill=dark,width=13)
-    elif mood == "surprised":
-        draw.arc((cx-100,cy-75,cx-30,cy-25),180,350,fill=dark,width=10)
-        draw.arc((cx+30,cy-75,cx+100,cy-25),190,360,fill=dark,width=10)
-    else:
-        draw.line((cx-88,cy-42,cx-38,cy-48),fill=dark,width=9)
-        draw.line((cx+38,cy-48,cx+88,cy-42),fill=dark,width=9)
-    for ex in (cx-62,cx+62):
-        draw.ellipse((ex-23,cy-20,ex+23,cy+28),fill="white",outline=dark,width=4)
-        draw.ellipse((ex-9,cy-7,ex+9,cy+20),fill=dark)
-        draw.ellipse((ex-4,cy-3,ex+2,cy+3),fill="white")
-    draw.ellipse((cx-13,cy+35,cx+13,cy+55),fill=(92,48,36))
-    if mood == "surprised":
-        draw.ellipse((cx-30,cy+75,cx+30,cy+140),fill=(75,22,30),outline=dark,width=6)
-    elif mood == "angry":
-        draw.arc((cx-65,cy+75,cx+65,cy+150),200,340,fill=dark,width=10)
-    else:
-        draw.arc((cx-70,cy+65,cx+70,cy+155),10,170,fill=dark,width=10)
-    # hands and cuffs
-    draw.ellipse((cx-180,cy+390,cx-110,cy+465),fill=skin,outline=dark,width=6)
-    draw.ellipse((cx+110,cy+390,cx+180,cy+465),fill=skin,outline=dark,width=6)
+def draw_star(draw, x, y, radius, color):
+    points = []
+    for i in range(10):
+        angle = -math.pi / 2 + i * math.pi / 5
+        r = radius if i % 2 == 0 else radius * 0.42
+        points.append((x + math.cos(angle) * r, y + math.sin(angle) * r))
+    draw.polygon(points, fill=color)
 
-def make_frame(path, title, role, line, index, total):
-    im = Image.new("RGB", (W, H), (248, 235, 215))
+def draw_animal(draw, kind, cx, cy, scale=1.0):
+    dark = (76, 63, 76)
+    if kind == "lion":
+        fur, mane = (250, 196, 91), (221, 137, 63)
+        draw.ellipse((cx-190,cy-210,cx+190,cy+170), fill=mane, outline=dark, width=9)
+        draw.ellipse((cx-140,cy-165,cx+140,cy+135), fill=fur, outline=dark, width=7)
+        # ears
+        for ex in (cx-115,cx+115):
+            draw.ellipse((ex-43,cy-185,ex+43,cy-105), fill=fur, outline=dark, width=7)
+            draw.ellipse((ex-20,cy-165,ex+20,cy-125), fill=(239,151,151))
+    elif kind == "elephant":
+        skin = (151, 190, 205)
+        draw.ellipse((cx-160,cy-160,cx+160,cy+155), fill=skin, outline=dark, width=8)
+        draw.ellipse((cx-215,cy-95,cx-95,cy+75), fill=(178,210,220), outline=dark, width=7)
+        draw.ellipse((cx+95,cy-95,cx+215,cy+75), fill=(178,210,220), outline=dark, width=7)
+        draw.rounded_rectangle((cx-38,cy-5,cx+38,cy+190), radius=35, fill=skin, outline=dark, width=8)
+        draw.arc((cx-20,cy+95,cx+100,cy+225), 5, 180, fill=dark, width=7)
+    elif kind == "rabbit":
+        fur = (248, 235, 222)
+        draw.ellipse((cx-135,cy-165,cx-45,cy-325), fill=fur, outline=dark, width=8)
+        draw.ellipse((cx+45,cy-325,cx+135,cy-165), fill=fur, outline=dark, width=8)
+        draw.ellipse((cx-155,cy-180,cx+155,cy+145), fill=fur, outline=dark, width=8)
+        draw.ellipse((cx-92,cy-275,cx-63,cy-190), fill=(240,160,170))
+        draw.ellipse((cx+63,cy-275,cx+92,cy-190), fill=(240,160,170))
+    else:
+        fur = (232, 190, 220)
+        draw.ellipse((cx-145,cy-155,cx+145,cy+145), fill=fur, outline=dark, width=8)
+    # face
+    for ex in (cx-58,cx+58):
+        draw.ellipse((ex-17,cy-45,ex+17,cy-5), fill=dark)
+        draw.ellipse((ex-7,cy-38,ex+3,cy-28), fill="white")
+    draw.ellipse((cx-18,cy+10,cx+18,cy+35), fill=(236,137,145))
+    draw.arc((cx-48,cy+20,cx+48,cy+90), 5, 175, fill=dark, width=7)
+    # rosy cheeks
+    draw.ellipse((cx-112,cy+25,cx-70,cy+60), fill=(246,165,164))
+    draw.ellipse((cx+70,cy+25,cx+112,cy+60), fill=(246,165,164))
+
+def make_frame(path, title, lyric, index, total, kind):
+    im = Image.new("RGB", (W, H), PALETTE[index % len(PALETTE)])
     d = ImageDraw.Draw(im)
-    # Manga-inspired dramatic background: speed lines and screen-tone dots
-    for k in range(48):
-        angle = (2 * math.pi * k) / 48
-        x1 = int(540 + math.cos(angle) * 120)
-        y1 = int(900 + math.sin(angle) * 120)
-        x2 = int(540 + math.cos(angle) * 1050)
-        y2 = int(900 + math.sin(angle) * 1800)
-        d.line((x1, y1, x2, y2), fill=(225, 205, 185), width=4)
-    for x in range(18, W, 34):
-        for y in range(440, 1040, 34):
-            if (x + y) % 3 == 0:
-                d.ellipse((x, y, x+5, y+5), fill=(220, 200, 185))
-    d.ellipse((-180, 1120, 420, 1730), fill=(239, 218, 190))
-    d.ellipse((740, 1150, 1280, 1740), fill=(239, 218, 190))
-    d.rounded_rectangle((45, 45, W-45, 285), radius=55, fill=(31, 29, 40))
-    d.rounded_rectangle((65, 65, W-65, 265), radius=42, outline=(245, 190, 83), width=5)
-    title_font = font(48, True)
-    title_lines = wrap(d, title, title_font, W-170)
-    y = 95 if len(title_lines) == 1 else 78
+    # soft clouds and floating stars
+    d.ellipse((-160,120,390,520), fill=(255,255,245))
+    d.ellipse((180,75,620,420), fill=(255,255,245))
+    d.ellipse((720,120,1240,520), fill=(255,255,245))
+    for x,y,r in [(120,650,28),(900,700,34),(180,1120,22),(880,1160,25),(540,470,25),(760,900,20)]:
+        draw_star(d,x,y,r,(255,190,75))
+    # title banner
+    d.rounded_rectangle((55,55,1025,300), radius=65, fill=(255,255,250), outline=(115,105,130), width=7)
+    title_font = get_font(48, True)
+    title_lines = wrap(d,title,title_font,850)
+    yy = 105 if len(title_lines)==1 else 75
     for t in title_lines[:2]:
-        box = d.textbbox((0, 0), t, font=title_font)
-        d.text(((W-(box[2]-box[0]))/2+3, y+4), t, font=title_font, fill=(90,75,70))
-        d.text(((W-(box[2]-box[0]))/2, y), t, font=title_font, fill="white")
-        y += 68
-    # Scene counter
-    d.rounded_rectangle((70, 330, 470, 425), radius=38, fill=(255, 199, 76), outline=(31,29,40), width=6)
-    d.text((105, 350), f"ÉPISODE  •  {index+1}/{total}", font=font(34, True), fill=(31,29,40))
-    # Dialogue card with depth
-    d.rounded_rectangle((83, 520, 1015, 1085), radius=65, fill=(205,185,160))
-    d.rounded_rectangle((65, 495, 997, 1060), radius=65, fill=(255,255,250), outline=(31,29,40), width=10)
-    who = "LE MARI" if role == "homme" else "LA FEMME"
-    badge = (39,105,170) if role == "homme" else (203,65,112)
-    d.rounded_rectangle((112, 545, 440, 640), radius=34, fill=badge, outline=(31,29,40), width=4)
-    d.text((150, 565), who, font=font(40, True), fill="white")
-    dialogue_font = font(55, True)
-    lines = wrap(d, line, dialogue_font, 800)
-    text_height = len(lines) * 82
-    ty = 735 + max(0, (250-text_height)//2)
-    for t in lines[:4]:
-        box = d.textbbox((0,0), t, font=dialogue_font)
-        d.text(((W-(box[2]-box[0]))/2, ty), t, font=dialogue_font, fill=(31,29,40))
-        ty += 82
-    # Manga impact marks around the character panels
-    for cx, cy in ((345, 1315), (735, 1315)):
-        for a in range(0, 360, 30):
-            rad = math.radians(a)
-            x1, y1 = int(cx + math.cos(rad)*205), int(cy + math.sin(rad)*205)
-            x2, y2 = int(cx + math.cos(rad)*255), int(cy + math.sin(rad)*255)
-            d.line((x1, y1, x2, y2), fill=(35, 31, 42), width=7)
-    # Character spotlights and richer cartoon portraits
-    d.ellipse((155, 1120, 535, 1510), fill=(255,255,250), outline=(31,29,40), width=7)
-    d.ellipse((545, 1120, 925, 1510), fill=(255,255,250), outline=(31,29,40), width=7)
-    draw_character(d, 345, 1290, "homme", "surprised" if role=="femme" else "smile")
-    draw_character(d, 735, 1290, "femme", "angry" if role=="femme" else "smile")
-    # Active speaker marker
-    sx = 345 if role=="homme" else 735
-    d.rounded_rectangle((sx-150, 1790, sx+150, 1870), radius=32, fill=(255,199,76), outline=(31,29,40), width=6)
-    d.text((sx-85, 1807), "À TOI !", font=font(38, True), fill=(31,29,40))
-    im.save(path, quality=95)
+        box=d.textbbox((0,0),t,font=title_font)
+        d.text(((W-(box[2]-box[0]))/2,yy),t,font=title_font,fill=INK)
+        yy += 65
+    # scene number
+    d.rounded_rectangle((390,350,690,435), radius=35, fill=(255,214,120), outline=INK, width=5)
+    label=f"CHANSON {index+1}/{total}"
+    d.text((425,370),label,font=get_font(31,True),fill=INK)
+    # character stage
+    d.ellipse((175,520,905,1330), fill=(255,255,248), outline=(255,255,255), width=14)
+    animal = kind[index % len(kind)]
+    draw_animal(d,animal,540,900)
+    # lyric panel
+    d.rounded_rectangle((55,1410,1025,1815), radius=65, fill=(255,255,250), outline=(115,105,130), width=7)
+    lines=wrap(d,lyric,get_font(48,True),820)
+    block_h=len(lines)*72
+    ty=1605-block_h//2
+    for line in lines[:4]:
+        box=d.textbbox((0,0),line,font=get_font(48,True))
+        d.text(((W-(box[2]-box[0]))/2,ty),line,font=get_font(48,True),fill=INK)
+        ty += 72
+    d.text((390,1850),"PAPI • PETITES CHANSONS",font=get_font(25,True),fill=(115,105,130))
+    im.save(path,quality=95)
 
-async def synthesize(text, role, path):
-    voice = "fr-FR-HenriNeural" if role == "homme" else "fr-FR-DeniseNeural"
-    rate = "+10%" if role == "homme" else "+6%"
-    await edge_tts.Communicate(text, voice=voice, rate=rate).save(str(path))
+async def make_voice(text, path):
+    # Voix française douce, débit ralenti. La mélodie instrumentale est originale.
+    await edge_tts.Communicate(text, voice="fr-FR-DeniseNeural", rate="-12%", pitch="+2Hz").save(str(path))
+
+def make_music(path, seconds):
+    # Petite mélodie originale en notes douces, synthétisée sans sample protégé.
+    sample_rate = 22050
+    notes = [523.25, 587.33, 659.25, 587.33, 523.25, 392.00, 440.00, 523.25]
+    beat = 0.36
+    total = int(seconds * sample_rate)
+    with wave.open(str(path), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(sample_rate)
+        chunk = 4096
+        for start in range(0,total,chunk):
+            frames=[]
+            for n in range(start,min(start+chunk,total)):
+                t=n/sample_rate
+                note_index=int(t/beat) % len(notes)
+                local=t % beat
+                envelope=min(1.0,local/0.025)*max(0.0,min(1.0,(beat-local)/0.07))
+                melody=math.sin(2*math.pi*notes[note_index]*t)
+                harmony=math.sin(2*math.pi*(notes[note_index]/2)*t)*0.22
+                sample=int(32767*0.10*envelope*(melody+harmony))
+                frames.append(struct.pack("<h",max(-32767,min(32767,sample))))
+            wav.writeframes(b"".join(frames))
 
 async def main():
-    sketch = random.choice(SKETCHES)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    work, output = Path("build"), Path("videos")
+    song=random.choice(SONGS)
+    stamp=datetime.now().strftime("%Y%m%d_%H%M%S")
+    work, output=Path("build"),Path("videos")
     work.mkdir(exist_ok=True)
     output.mkdir(exist_ok=True)
-    frames, audios, durations = [], [], []
-    for i, (role, line) in enumerate(sketch["dialogue"]):
-        frame = work / f"frame_{i:02d}.jpg"
-        audio = work / f"line_{i:02d}.mp3"
-        make_frame(frame, sketch["title"], role, line, i, len(sketch["dialogue"]))
-        await synthesize(line, role, audio)
-        probe = subprocess.check_output([
-            "ffprobe", "-v", "error", "-show_entries", "format=duration",
-            "-of", "default=noprint_wrappers=1:nokey=1", str(audio)
-        ], text=True).strip()
-        duration = float(probe) + 0.45
+    frames,audios,durations=[],[],[]
+    animals=["lion","elephant","rabbit","bear","lion"]
+    for i,line in enumerate(song["lines"]):
+        frame=work/f"nursery_{i:02d}.jpg"
+        audio=work/f"voice_{i:02d}.mp3"
+        make_frame(frame,song["title"],line,i,len(song["lines"]),animals)
+        await make_voice(line,audio)
+        probe=subprocess.check_output([
+            "ffprobe","-v","error","-show_entries","format=duration",
+            "-of","default=noprint_wrappers=1:nokey=1",str(audio)
+        ],text=True).strip()
+        duration=float(probe)+0.55
         frames.append(frame)
         audios.append(audio)
         durations.append(duration)
 
-    frame_list, audio_list = work/"frames.txt", work/"audios.txt"
-    with frame_list.open("w", encoding="utf-8") as f:
-        for frame, duration in zip(frames, durations):
-            f.write(f"file '{frame.resolve()}'\n")
-            f.write(f"duration {duration:.3f}\n")
-        f.write(f"file '{frames[-1].resolve()}'\n")
-    with audio_list.open("w", encoding="utf-8") as f:
+    frame_list=work/"frames.txt"
+    audio_list=work/"audios.txt"
+    with frame_list.open("w",encoding="utf-8") as f:
+        for frame,duration in zip(frames,durations):
+            f.write(f"file '{frame.resolve()}'\\n")
+            f.write(f"duration {duration:.3f}\\n")
+        f.write(f"file '{frames[-1].resolve()}'\\n")
+    with audio_list.open("w",encoding="utf-8") as f:
         for audio in audios:
-            f.write(f"file '{audio.resolve()}'\n")
+            f.write(f"file '{audio.resolve()}'\\n")
 
-    joined_audio = work/"narration.mp3"
-    subprocess.run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(audio_list),"-c:a","libmp3lame","-q:a","4",str(joined_audio)],check=True)
-    video_file = output / f"papi_comedy_{stamp}.mp4"
+    narration=work/"narration.mp3"
+    subprocess.run(["ffmpeg","-y","-f","concat","-safe","0","-i",str(audio_list),"-c:a","libmp3lame","-q:a","4",str(narration)],check=True)
+    total=sum(durations)
+    music=work/"original_melody.wav"
+    make_music(music,total+1)
+    video=output/f"papi_comptine_{stamp}.mp4"
     subprocess.run([
-        "ffmpeg","-y","-f","concat","-safe","0","-i",str(frame_list),"-i",str(joined_audio),
+        "ffmpeg","-y","-f","concat","-safe","0","-i",str(frame_list),
+        "-i",str(narration),"-i",str(music),
+        "-filter_complex","[1:a]volume=1.0[voice];[2:a]volume=0.22[music];[voice][music]amix=inputs=2:duration=first:dropout_transition=2[a]",
+        "-map","0:v","-map","[a]",
         "-vf","scale=2160:3840:flags=lanczos,unsharp=5:5:0.35:5:5:0.0,format=yuv420p",
         "-r","30","-c:v","libx264","-preset","medium","-crf","18","-tune","stillimage",
-        "-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart",str(video_file)
+        "-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart",str(video)
     ],check=True)
-    print(f"VIDEO CREATED: {video_file}")
-    print(f"TITLE: {sketch['title']}")
+    print(f"VIDEO CREATED: {video}")
+    print(f"TITLE: {song['title']} | Comptine originale pour bébé")
+    print("FORMAT: comptine française, voix douce et mélodie instrumentale originale")
 
-if __name__ == "__main__":
+if __name__=="__main__":
     asyncio.run(main())
