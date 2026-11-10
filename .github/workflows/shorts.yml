@@ -26,7 +26,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
-          pip install edge-tts pillow
+          pip install edge-tts pillow upload-post
 
       - name: Generer une video illustree
         run: |
@@ -46,21 +46,7 @@ jobs:
           test -n "$UPLOAD_POST_API_KEY"
           DURATION="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$VIDEO")"
           python -c "import sys; d=float(sys.argv[1]); sys.exit(0 if 0 < d <= 180 else 1)" "$DURATION"
-          RESPONSE="$(curl --fail-with-body --silent --show-error \
-            -X POST "https://api.upload-post.com/api/upload" \
-            -H "Authorization: Apikey $UPLOAD_POST_API_KEY" \
-            -H "Idempotency-Key: papi-comedy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
-            -F "video=@$VIDEO;type=video/mp4" \
-            -F "title=$TITLE" \
-            -F "description=Une nouvelle sketch humoristique de Papi Comedy 😂 Abonne-toi pour ne rien manquer !" \
-            -F "user=P" \
-            -F "platform[]=youtube" \
-            -F "privacyStatus=public" \
-            -F "tags[]=humour" \
-            -F "tags[]=comedy" \
-            -F "tags[]=shorts")"
-          echo "$RESPONSE"
-          python -c "import json,sys; r=json.loads(sys.argv[1]); sys.exit(0 if r.get('success') is True else 1)" "$RESPONSE"
+          python publish.py "$VIDEO" "$TITLE"
 
       - name: Sauvegarder la derniere video
         run: |
