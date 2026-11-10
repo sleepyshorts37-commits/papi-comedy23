@@ -1,0 +1,28 @@
+
+name: Papi Comedy - Production
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 12,17,20 * * *"
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Recuperer le projet
+        uses: actions/checkout@v4
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer les dependances
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          pip install edge-tts
+
+      - name: Generer une video
+        run: python generate.py
