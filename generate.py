@@ -83,75 +83,100 @@ def wrap(draw, text, fnt, max_width):
     return lines
 
 def draw_character(draw, cx, cy, role, mood):
-    skin = (150, 91, 62)
-    shirt = BLUE if role == "homme" else PINK
-    # body and neck
-    draw.rounded_rectangle((cx-125, cy+155, cx+125, cy+510), radius=85, fill=shirt, outline=INK, width=8)
-    draw.rectangle((cx-35, cy+110, cx+35, cy+205), fill=skin, outline=INK, width=5)
-    # head
-    draw.ellipse((cx-145, cy-145, cx+145, cy+160), fill=skin, outline=INK, width=8)
-    # hair
+    skin = (111, 65, 45)
+    shirt = (39, 105, 170) if role == "homme" else (203, 65, 112)
+    dark = (28, 23, 27)
+    # Neck, shoulders and torso with layered clothing
+    draw.rounded_rectangle((cx-150, cy+150, cx+150, cy+540), radius=95, fill=shirt, outline=dark, width=10)
+    draw.polygon([(cx-52,cy+170),(cx,cy+245),(cx+52,cy+170)], fill=(245,238,226), outline=dark)
+    draw.line((cx,cy+245,cx,cy+490), fill=(245,238,226), width=7)
+    draw.ellipse((cx-48,cy+105,cx+48,cy+220), fill=skin, outline=dark, width=7)
+    # Ears and face
+    draw.ellipse((cx-165,cy-65,cx-105,cy+55), fill=skin, outline=dark, width=8)
+    draw.ellipse((cx+105,cy-65,cx+165,cy+55), fill=skin, outline=dark, width=8)
+    draw.ellipse((cx-145,cy-155,cx+145,cy+170), fill=skin, outline=dark, width=10)
+    # Hair style
     if role == "homme":
-        draw.pieslice((cx-150, cy-165, cx+150, cy+85), 180, 360, fill=(28, 24, 25), outline=INK, width=5)
+        draw.pieslice((cx-152,cy-180,cx+152,cy+100),180,360,fill=(25,21,22),outline=dark,width=7)
+        for dx in [-100,-50,0,50,100]:
+            draw.arc((cx+dx-28,cy-165,cx+dx+28,cy-100),180,350,fill=(65,42,34),width=8)
     else:
-        draw.arc((cx-165, cy-170, cx+165, cy+175), 175, 365, fill=(28, 24, 25), width=34)
-        draw.ellipse((cx-160, cy-20, cx-95, cy+210), fill=(28,24,25))
-        draw.ellipse((cx+95, cy-20, cx+160, cy+210), fill=(28,24,25))
-    # eyes and eyebrows
-    draw.ellipse((cx-78, cy-25, cx-42, cy+15), fill="white", outline=INK, width=4)
-    draw.ellipse((cx+42, cy-25, cx+78, cy+15), fill="white", outline=INK, width=4)
-    draw.ellipse((cx-65, cy-12, cx-50, cy+7), fill=INK)
-    draw.ellipse((cx+55, cy-12, cx+70, cy+7), fill=INK)
+        draw.arc((cx-175,cy-190,cx+175,cy+180),175,365,fill=(22,18,22),width=42)
+        draw.rounded_rectangle((cx-165,cy-25,cx-115,cy+270),radius=24,fill=(22,18,22))
+        draw.rounded_rectangle((cx+115,cy-25,cx+165,cy+270),radius=24,fill=(22,18,22))
+        # head scarf detail
+        draw.arc((cx-135,cy-175,cx+135,cy+30),185,355,fill=(245,183,73),width=12)
+    # expressive brows and eyes
+    if mood == "angry":
+        draw.line((cx-90,cy-45,cx-35,cy-20),fill=dark,width=13)
+        draw.line((cx+35,cy-20,cx+90,cy-45),fill=dark,width=13)
+    elif mood == "surprised":
+        draw.arc((cx-100,cy-75,cx-30,cy-25),180,350,fill=dark,width=10)
+        draw.arc((cx+30,cy-75,cx+100,cy-25),190,360,fill=dark,width=10)
+    else:
+        draw.line((cx-88,cy-42,cx-38,cy-48),fill=dark,width=9)
+        draw.line((cx+38,cy-48,cx+88,cy-42),fill=dark,width=9)
+    for ex in (cx-62,cx+62):
+        draw.ellipse((ex-23,cy-20,ex+23,cy+28),fill="white",outline=dark,width=4)
+        draw.ellipse((ex-9,cy-7,ex+9,cy+20),fill=dark)
+        draw.ellipse((ex-4,cy-3,ex+2,cy+3),fill="white")
+    draw.ellipse((cx-13,cy+35,cx+13,cy+55),fill=(92,48,36))
     if mood == "surprised":
-        draw.ellipse((cx-25, cy+65, cx+25, cy+115), fill=(75, 25, 28), outline=INK, width=4)
-        draw.arc((cx-95, cy-65, cx-25, cy-20), 180, 350, fill=INK, width=8)
-        draw.arc((cx+25, cy-65, cx+95, cy-20), 190, 360, fill=INK, width=8)
+        draw.ellipse((cx-30,cy+75,cx+30,cy+140),fill=(75,22,30),outline=dark,width=6)
     elif mood == "angry":
-        draw.line((cx-90, cy-55, cx-35, cy-30), fill=INK, width=10)
-        draw.line((cx+35, cy-30, cx+90, cy-55), fill=INK, width=10)
-        draw.arc((cx-45, cy+65, cx+45, cy+130), 190, 350, fill=INK, width=9)
+        draw.arc((cx-65,cy+75,cx+65,cy+150),200,340,fill=dark,width=10)
     else:
-        draw.arc((cx-55, cy+45, cx+55, cy+125), 10, 170, fill=INK, width=8)
+        draw.arc((cx-70,cy+65,cx+70,cy+155),10,170,fill=dark,width=10)
+    # hands and cuffs
+    draw.ellipse((cx-180,cy+390,cx-110,cy+465),fill=skin,outline=dark,width=6)
+    draw.ellipse((cx+110,cy+390,cx+180,cy+465),fill=skin,outline=dark,width=6)
 
 def make_frame(path, title, role, line, index, total):
-    im = Image.new("RGB", (W, H), BG)
+    im = Image.new("RGB", (W, H), (248, 235, 215))
     d = ImageDraw.Draw(im)
-    # top banner and accents
-    d.rounded_rectangle((55, 55, W-55, 270), radius=45, fill=INK)
+    # Soft illustrated background, decorative rays and city-like silhouettes
+    for x in range(0, W, 120):
+        d.line((x, 300, x-180, 1050), fill=(240, 220, 193), width=5)
+    d.ellipse((-180, 1120, 420, 1730), fill=(239, 218, 190))
+    d.ellipse((740, 1150, 1280, 1740), fill=(239, 218, 190))
+    d.rounded_rectangle((45, 45, W-45, 285), radius=55, fill=(31, 29, 40))
+    d.rounded_rectangle((65, 65, W-65, 265), radius=42, outline=(245, 190, 83), width=5)
     title_font = font(48, True)
-    title_lines = wrap(d, title, title_font, W-150)
-    y = 90
+    title_lines = wrap(d, title, title_font, W-170)
+    y = 95 if len(title_lines) == 1 else 78
     for t in title_lines[:2]:
-        box = d.textbbox((0,0), t, font=title_font)
+        box = d.textbbox((0, 0), t, font=title_font)
+        d.text(((W-(box[2]-box[0]))/2+3, y+4), t, font=title_font, fill=(90,75,70))
         d.text(((W-(box[2]-box[0]))/2, y), t, font=title_font, fill="white")
-        y += 66
-    d.ellipse((75, 335, 170, 430), fill=YELLOW)
-    d.text((100, 348), "!", font=font(52, True), fill=INK)
-    d.text((205, 365), f"SCÈNE {index+1}/{total}", font=font(36, True), fill=INK)
-    # speech bubble
-    bubble = (70, 520, 1010, 1050)
-    d.rounded_rectangle(bubble, radius=65, fill="white", outline=INK, width=9)
-    d.polygon([(690,1045),(770,1045),(735,1120)], fill="white")
-    d.line((690,1045,735,1120,770,1045), fill=INK, width=8)
+        y += 68
+    # Scene counter
+    d.rounded_rectangle((70, 330, 470, 425), radius=38, fill=(255, 199, 76), outline=(31,29,40), width=6)
+    d.text((105, 350), f"ÉPISODE  •  {index+1}/{total}", font=font(34, True), fill=(31,29,40))
+    # Dialogue card with depth
+    d.rounded_rectangle((83, 520, 1015, 1085), radius=65, fill=(205,185,160))
+    d.rounded_rectangle((65, 495, 997, 1060), radius=65, fill=(255,255,250), outline=(31,29,40), width=10)
     who = "LE MARI" if role == "homme" else "LA FEMME"
-    d.rounded_rectangle((115, 570, 440, 650), radius=30, fill=BLUE if role=="homme" else PINK)
-    d.text((145, 585), who, font=font(38, True), fill="white")
-    dialogue_font = font(54, True)
-    lines = wrap(d, line, dialogue_font, 790)
-    text_height = len(lines) * 78
-    ty = 720 + max(0, (250-text_height)//2)
+    badge = (39,105,170) if role == "homme" else (203,65,112)
+    d.rounded_rectangle((112, 545, 440, 640), radius=34, fill=badge, outline=(31,29,40), width=4)
+    d.text((150, 565), who, font=font(40, True), fill="white")
+    dialogue_font = font(55, True)
+    lines = wrap(d, line, dialogue_font, 800)
+    text_height = len(lines) * 82
+    ty = 735 + max(0, (250-text_height)//2)
     for t in lines[:4]:
         box = d.textbbox((0,0), t, font=dialogue_font)
-        d.text(((W-(box[2]-box[0]))/2, ty), t, font=dialogue_font, fill=INK)
-        ty += 78
-    # cartoon duo
+        d.text(((W-(box[2]-box[0]))/2, ty), t, font=dialogue_font, fill=(31,29,40))
+        ty += 82
+    # Character spotlights and richer cartoon portraits
+    d.ellipse((155, 1120, 535, 1510), fill=(255,255,250), outline=(31,29,40), width=7)
+    d.ellipse((545, 1120, 925, 1510), fill=(255,255,250), outline=(31,29,40), width=7)
     draw_character(d, 345, 1290, "homme", "surprised" if role=="femme" else "smile")
-    draw_character(d, 745, 1290, "femme", "angry" if role=="femme" else "smile")
-    # speaker spotlight
-    sx = 345 if role=="homme" else 745
-    d.rounded_rectangle((sx-145, 1770, sx+145, 1845), radius=30, fill=YELLOW, outline=INK, width=5)
-    d.text((sx-100, 1786), "PARLE", font=font(34, True), fill=INK)
-    im.save(path, quality=92)
+    draw_character(d, 735, 1290, "femme", "angry" if role=="femme" else "smile")
+    # Active speaker marker
+    sx = 345 if role=="homme" else 735
+    d.rounded_rectangle((sx-150, 1790, sx+150, 1870), radius=32, fill=(255,199,76), outline=(31,29,40), width=6)
+    d.text((sx-85, 1807), "À TOI !", font=font(38, True), fill=(31,29,40))
+    im.save(path, quality=95)
 
 async def synthesize(text, role, path):
     voice = "fr-FR-HenriNeural" if role == "homme" else "fr-FR-DeniseNeural"
