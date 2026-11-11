@@ -74,7 +74,7 @@ jobs:
           PY
 
       - name: Publier automatiquement sur YouTube Shorts
-        if: steps.quota.outputs.can_publish == 'true' || github.event_name == 'push'
+        if: steps.quota.outputs.can_publish == 'true'
         env:
           UPLOAD_POST_API_KEY: ${{ secrets.UPLOAD_POST_API_KEY }}
           GITHUB_RUN_ID: ${{ github.run_id }}
@@ -87,7 +87,7 @@ jobs:
           python publish.py "$VIDEO" "$TITLE"
 
       - name: Sauvegarder la derniere video
-        if: steps.quota.outputs.can_publish == 'true' || github.event_name == 'push'
+        if: steps.quota.outputs.can_publish == 'true'
         run: |
           mkdir -p public
           cp "$(ls -t videos/*.mp4 | head -n 1)" public/latest.mp4
