@@ -26,18 +26,55 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Verifier le quota mensuel Upload-Post
+        id: quota
+        env:
+          UPLOAD_POST_API_KEY: ${{ secrets.UPLOAD_POST_API_KEY }}
+        run: python publish.py --check-quota
+
       - name: Installer les dependances
+        if: steps.quota.outputs.can_publish == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
-          pip install edge-tts pillow upload-post
+          pip install edge-tts pillow upload-post requests
 
       - name: Generer une video illustree
+        if: steps.quota.outputs.can_publish == 'true'
         run: |
           set -o pipefail
           python generate.py | tee generation.log
 
+      - name: Verifier le format vertical et la piste audio
+        if: steps.quota.outputs.can_publish == 'true'
+        run: |
+          VIDEO="$(ls -t videos/*.mp4 | head -n 1)"
+          python - "$VIDEO" <<'PY'
+          import json, subprocess, sys
+          path = sys.argv[1]
+          probe = json.loads(subprocess.check_output([
+              "ffprobe", "-v", "error", "-show_streams", "-show_format",
+              "-of", "json", path
+          ], text=True))
+          video = next((s for s in probe["streams"] if s.get("codec_type") == "video"), None)
+          audio = next((s for s in probe["streams"] if s.get("codec_type") == "audio"), None)
+          if not video or not audio:
+              raise SystemExit("Video or audio stream missing")
+          width, height = int(video["width"]), int(video["height"])
+          ratio = width / height
+          duration = float(probe["format"]["duration"])
+          audio_duration = float(audio.get("duration") or duration)
+          if width < 1080 or height < 1920 or abs(ratio - 9/16) > 0.002:
+              raise SystemExit(f"Invalid vertical format: {width}x{height}")
+          if not 0 < duration <= 180:
+              raise SystemExit(f"Invalid duration: {duration:.2f}s")
+          if abs(duration - audio_duration) > 1.0:
+              raise SystemExit(f"Audio/video duration mismatch: {duration:.2f}s vs {audio_duration:.2f}s")
+          print(f"FORMAT OK: {width}x{height}, 9:16, audio present, {duration:.2f}s")
+          PY
+
       - name: Publier automatiquement sur YouTube Shorts
+        if: steps.quota.outputs.can_publish == 'true'
         env:
           UPLOAD_POST_API_KEY: ${{ secrets.UPLOAD_POST_API_KEY }}
           GITHUB_RUN_ID: ${{ github.run_id }}
@@ -47,12 +84,10 @@ jobs:
           VIDEO="$(ls -t videos/*.mp4 | head -n 1)"
           TITLE="$(sed -n 's/^TITLE: //p' generation.log | tail -n 1)"
           test -n "$TITLE"
-          test -n "$UPLOAD_POST_API_KEY"
-          DURATION="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$VIDEO")"
-          python -c "import sys; d=float(sys.argv[1]); sys.exit(0 if 0 < d <= 180 else 1)" "$DURATION"
           python publish.py "$VIDEO" "$TITLE"
 
       - name: Sauvegarder la derniere video
+        if: steps.quota.outputs.can_publish == 'true'
         run: |
           mkdir -p public
           cp "$(ls -t videos/*.mp4 | head -n 1)" public/latest.mp4
