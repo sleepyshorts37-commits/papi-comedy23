@@ -5,9 +5,54 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 API_BASE = "https://api.upload-post.com/api"
+STATE_PATH = Path("quota_state.json")
+
+
+def load_state():
+    try:
+        return json.loads(STATE_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(state):
+    STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def find_usage(value):
+    if isinstance(value, dict):
+        if "count" in value:
+            return value
+        for nested in value.values():
+            found = find_usage(nested)
+            if found:
+                return found
+    elif isinstance(value, list):
+        for nested in value:
+            found = find_usage(nested)
+            if found:
+                return found
+    return {}
+
+
+def get_account(api_key):
+    request = urllib.request.Request(
+        f"{API_BASE}/uploadposts/me",
+        headers={"Authorization": f"Apikey {api_key}", "Accept": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        print(f"::error::Verification du compte Upload-Post impossible (HTTP {exc.code}).")
+        raise SystemExit(1)
+    except Exception as exc:
+        print(f"::error::Verification du compte Upload-Post impossible ({type(exc).__name__}).")
+        raise SystemExit(1)
 
 
 def write_output(can_publish):
@@ -25,48 +70,66 @@ def check_quota():
         print("::error::Secret GitHub manquant : UPLOAD_POST_API_KEY.")
         raise SystemExit(1)
 
-    request = urllib.request.Request(
-        f"{API_BASE}/uploadposts/me",
-        headers={"Authorization": f"Apikey {api_key}", "Accept": "application/json"},
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            account = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        print(f"::error::Verification du quota Upload-Post impossible (HTTP {exc.code}).")
-        raise SystemExit(1)
-    except Exception as exc:
-        print(f"::error::Verification du quota Upload-Post impossible ({type(exc).__name__}).")
-        raise SystemExit(1)
+    account = get_account(api_key)
+    plan = str(account.get("plan", "")).strip()
+    plan_key = plan.lower()
+    api_usage = find_usage(account)
+    state = load_state()
 
-    usage = account.get("api_usage") or account.get("usage") or {}
-    count = usage.get("count")
-    limit = usage.get("limit")
-    plan = str(account.get("plan", "")).strip().lower()
+    count = api_usage.get("count")
+    limit = api_usage.get("limit") or state.get("limit")
+    last_reset = api_usage.get("last_reset") or state.get("last_reset")
 
-    # Upload-Post documents 10 monthly API uploads on the Free/Default tier.
-    if limit is None and plan in {"free", "default"}:
+    if count is None:
+        count = state.get("count")
+
+    # Upload-Post documents 10 monthly uploads for Free/Default accounts.
+    if limit is None and plan_key in {"free", "default"}:
         limit = 10
 
-    if count is None or limit is None:
-        print("::warning::Quota mensuel non lisible dans la reponse Upload-Post. Publication suspendue par precaution.")
-        write_output(False)
+    # Its monthly counter resets 30 days after last_reset.
+    if count is not None and last_reset:
+        try:
+            reset_at = datetime.fromisoformat(str(last_reset).replace("Z", "+00:00"))
+            if reset_at.tzinfo is None:
+                reset_at = reset_at.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) >= reset_at + timedelta(days=30):
+                count = 0
+                last_reset = datetime.now(timezone.utc).isoformat()
+        except ValueError:
+            pass
+
+    if count is not None and limit is not None:
+        count, limit = int(count), int(limit)
+        state = {
+            "count": count,
+            "limit": limit,
+            "last_reset": last_reset,
+            "plan": plan or state.get("plan", "unknown"),
+            "source": "Upload-Post API usage / last confirmed upload",
+        }
+        save_state(state)
+        summary = f"Quota Upload-Post : {count}/{limit} uploads mensuels (plan {plan or 'inconnu'})."
+        print(summary)
+        summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary_path:
+            with open(summary_path, "a", encoding="utf-8") as output:
+                output.write(summary + "\n")
+        if count >= limit:
+            print(f"::warning::Quota mensuel atteint ({count}/{limit}). Generation et publication suspendues. Augmenter le forfait Upload-Post pour reprendre les envois.")
+            write_output(False)
+            return
+        write_output(True)
         return
 
-    count, limit = int(count), int(limit)
-    summary = f"Quota Upload-Post : {count}/{limit} uploads mensuels (plan {account.get('plan', 'inconnu')})."
-    print(summary)
-    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
-    if summary_path:
-        with open(summary_path, "a", encoding="utf-8") as output:
-            output.write(summary + "\n")
-
-    if count >= limit:
-        print(f"::warning::Quota mensuel atteint ({count}/{limit}). Aucune video ne sera generee ni envoyee. Augmenter le forfait Upload-Post pour reprendre les publications.")
-        write_output(False)
+    # A paid plan is allowed to proceed; Upload-Post itself enforces its plan quota.
+    if plan_key not in {"free", "default", ""}:
+        print(f"::notice::Forfait {plan} detecte; les limites du forfait seront appliquees par Upload-Post.")
+        write_output(True)
         return
 
-    write_output(True)
+    print("::warning::Impossible de lire le quota et aucun compteur local fiable n'est disponible. Publication suspendue par precaution.")
+    write_output(False)
 
 
 def parse_response(response):
@@ -116,6 +179,22 @@ def wait_for_completion(payload, api_key):
         if status in {"failed", "error"}:
             raise SystemExit("Upload-Post a termine le traitement avec un echec.")
     raise SystemExit("Delai depasse en attendant la confirmation de publication Upload-Post.")
+
+
+def persist_usage(payload):
+    usage = find_usage(payload)
+    state = load_state()
+    if usage.get("count") is not None:
+        state["count"] = int(usage["count"])
+    elif state.get("count") is not None:
+        state["count"] = int(state["count"]) + 1
+    if usage.get("limit") is not None:
+        state["limit"] = int(usage["limit"])
+    if usage.get("last_reset"):
+        state["last_reset"] = usage["last_reset"]
+    state.setdefault("plan", "Default")
+    state["source"] = "Last confirmed Upload-Post response"
+    save_state(state)
 
 
 def publish(video_path, title):
@@ -175,6 +254,7 @@ def publish(video_path, title):
     if not post_id or (upload_status and upload_status not in {"uploaded", "published", "completed", "success"}):
         raise SystemExit("Upload-Post n'a pas fourni de confirmation YouTube avec identifiant de video.")
 
+    persist_usage(payload)
     print(f"PUBLICATION YOUTUBE CONFIRMEE: https://www.youtube.com/watch?v={post_id}")
     print(f"YOUTUBE_VIDEO_ID: {post_id}")
     if result.get("youtube_processing_status"):
