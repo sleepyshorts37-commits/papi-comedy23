@@ -76,16 +76,24 @@ def check_quota():
     api_usage = find_usage(account)
     state = load_state()
 
-    count = api_usage.get("count")
-    limit = api_usage.get("limit") or state.get("limit")
+    api_count = api_usage.get("count")
+    api_limit = api_usage.get("limit")
     last_reset = api_usage.get("last_reset") or state.get("last_reset")
 
-    if count is None:
-        count = state.get("count")
-
-    # Upload-Post documents 10 monthly uploads for Free/Default accounts.
-    if limit is None and plan_key in {"free", "default"}:
-        limit = 10
+    # Do not apply a stale Free/Default limit after the user upgrades.
+    if plan_key not in {"free", "default", ""}:
+        if api_count is not None and api_limit is not None:
+            count, limit = api_count, api_limit
+        else:
+            print(f"::notice::Forfait payant detecte ({plan}); les limites du forfait seront appliquees par Upload-Post.")
+            write_output(True)
+            return
+    else:
+        count = api_count if api_count is not None else state.get("count")
+        limit = api_limit if api_limit is not None else state.get("limit")
+        # Upload-Post documents 10 monthly uploads for Free/Default accounts.
+        if limit is None and plan_key in {"free", "default"}:
+            limit = 10
 
     # Its monthly counter resets 30 days after last_reset.
     if count is not None and last_reset:
